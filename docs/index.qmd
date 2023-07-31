@@ -10,7 +10,7 @@ code-overflow: wrap
 code-tools: true
 toc: true
 toc-depth: 3
-toc-expand: false
+toc-expand: true
 format: html
 ---
 
