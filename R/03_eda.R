@@ -3,21 +3,6 @@
 
 library(gtsummary)
 
-## combined screen and gxp 
-combined <- screen |> 
-	## picking variables of interest
-	dplyr::select(
-		pid, Gender, sex, Age, age_cat, hiv_self_report, 
-		MaritalStatus, education_level, country, counties_lived, 
-		own_house, payRent, income_total, current_living, 
-		smoke_current, alcohol, alcohol_sex, 
-		drug_use, hysterectomy, menopause, pregnant, 
-		contraceptive, 
-		hpv_test:douching_with
-	) |> 
-	dplyr::left_join(gxp, by = "pid") |> 
-	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
-
 
 # combined |> 
 # 	head() |> 

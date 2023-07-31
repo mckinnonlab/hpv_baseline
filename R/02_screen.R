@@ -57,13 +57,13 @@ screen <- raw_screen %>%
 		## current living places 
 		current_living = case_when(
 			current_living_a == 1 ~ "Alone", 
-			current_living_b == 1 ~ "family", 
-			current_living_c == 1 ~ "friends", 
-			current_living_d == 1 ~ "friends", 
+			current_living_b == 1 ~ "Family", 
+			current_living_c == 1 ~ "Friends", 
+			current_living_d == 1 ~ "Friends", 
 			current_living_e == 1 ~ "Sex Partners", 
 			current_living_f == 1 ~ "Sex Partners", 
-			current_living_g == 1 ~ "family", 
-			current_living_h == 1 ~ "family", 
+			current_living_g == 1 ~ "Family", 
+			current_living_h == 1 ~ "Family", 
 			current_living_i == 1 ~ "Other", 
 			TRUE ~ NA_character_
 		),
@@ -161,7 +161,7 @@ screen <- raw_screen %>%
 		
 		## alcohol drinking in the last 2 months 
 		alcohol = factor(Q22, labels = c(
-			"Never", "Monthly or less", "weekly", "2-3 times per week", "4+ times per week"
+			"Never", "Monthly or less", "Weekly", "2-3 times per week", "4+ times per week"
 		)), 
 		alcohol_sex = factor(Q23, 4:1, c("Never", "Sometimes", "Often", "Always")), 
 		alcohol_vomit = factor(Q24, 4:1, c("Never", "Sometimes", "Often", "Always")),
@@ -230,7 +230,7 @@ screen <- raw_screen %>%
 		)), 
 		
 		## TODO:: do wordcloud vis for main reasons Q53 Q58
-		hpv_last_test = ifelse(Q54 == 2, 1, 0), 
+		anal_cancer_last_test = ifelse(Q54 == 2, 1, 0), 
 		
 		## sex practices 
 		condom_lastsex = ifelse(Q60 == 2, 0, 1), 
@@ -318,11 +318,12 @@ screen <- raw_screen %>%
 			Gender == 2 ~ "cis-Female", 
 			Gender == 3 ~ "trans-Male", 
 			Gender == 4 ~ "trans-Female", 
-			Gender == 5 ~ "Prefer not to answer", 
+			# Gender == 5 ~ "Prefer not to answer", 
 			TRUE ~ NA_character_
 		), 
 		Gender = factor(Gender, c(
-			"cis-Female", "trans-Female", "cis-Male", "trans-Male", "Prefer not to answer"
+			"cis-Female", "trans-Female", "cis-Male", "trans-Male"
+			# "Prefer not to answer"
 		)), 
 		hiv_sym = case_when(
 			Q44 == 1 ~ "HIV+", 

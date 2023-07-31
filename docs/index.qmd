@@ -1,0 +1,348 @@
+---
+title: "HPV Baseline Preliminary Data Analysis"
+author: Myo Minn Oo & Joel Fowke
+date: last-modified
+title-block-style: plain
+title-block-banner: true
+code-fold: true
+code-copy: true
+code-overflow: wrap
+code-tools: true
+toc: true
+toc-depth: 3
+toc-expand: false
+format: html
+---
+
+```{r setup}
+#| warning: false
+#| message: false
+here::here("data", "hpv_processed.rda") |> 
+	load()
+
+## load packages
+library(tidyverse)
+library(gtsummary)
+
+## import custom-functions from utils
+source(here::here("R", "utils.R"), echo = FALSE)
+```
+
+## About
+
+This is a preliminary data analysis using baseline data from Gates-funded HPV study in Nairobi, 2022-2023. The screening period is between May/June 2022 and July 2023.
+
+## Research questions
+
+1.  What is the prevalence of HPV among female sex workers and the distributions of genotypes (using geneXpert machine; hence five channel)?
+2.  What baseline characteristics correlate with HPV prevalence?
+
+## Known issues
+
+The study screened 1,968 participants and enrolled 701. However, due to filing issues which the team in Nairobi are currently fixing, the database comprises of only `r nrow(combined)` unique individuals (short of `r 1968 - nrow(combined)`), which are used in the following analysis. 
+
+## Exploratory data analysis
+
+### Comparing baseline characteristics between FSW and MSM:
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+tbl_merge(
+	tbls = list(
+		combined |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_total(missing = "ifany"), 
+		combined |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_by(by = sex, 
+						byname = "Participant Type by Sex", 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "**Participant Type by Sex**")
+)
+
+```
+
+
+### Population Pyramid Graph 
+
+```{r}
+#| warning: false
+#| fig-width: 8
+#| fig-height: 8
+combined |> 
+	dplyr::mutate(
+		age_cat2 = cut(Age, c(0, 20, 30, 40, 50, 60, 100))
+	) |> 
+	apyramid::age_pyramid(age_cat2, sex) + 
+	labs(
+		y = "Frequency", 
+		x = "Age"
+	) + 
+	theme_classic()
+```
+
+
+
+
+## Prevalence of HPV by baseline characteristics
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+fsw <- 
+	combined |> 
+	dplyr::filter(sex == "FSW") |> 
+	dplyr::mutate(
+		Gender = forcats::fct_drop(Gender)
+	)
+
+
+gtsummary::tbl_merge(
+	tbls = list(
+		fsw |> 
+			dplyr::select(Gender:douching_with) |> 
+			table1_total(missing = "ifany"), 
+		fsw |> 
+			dplyr::select(Gender:douching_with, hpv_result) |> 
+			table1_by(by = hpv_result, byname = "HPV Result", 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	), 
+	tab_spanner = c(NA, "HPV Result")
+)
+```
+
+
+## Genotype distributions
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 5
+# gtsummary::tbl_merge(
+# 	tbls = list(
+# 		fsw |> 
+# 			dplyr::select(hr_hpv_16:hpv_combined) |> 
+# 			table1_total(missing = "ifany"), 
+# 		fsw |> 
+# 			dplyr::select(hr_hpv_16:hpv_combined, hpv_result) |> 
+# 			table1_by(by = hpv_result, byname = "HPV Result", 
+# 						# missing = "ifany", 
+# 						percent = "row", 
+# 						add_N = FALSE, 
+# 						add_total = FALSE)
+# 	), 
+# 	tab_spanner = c(NA, "HPV Result")
+# )
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5) |> 
+	setNames(paste0("P", 1:5)) |> 
+	tidyr::pivot_longer(cols = everything()) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	ggplot(aes(y = name, x = n)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = pct), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution among FSW"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		
+	) + 
+	theme_classic() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report) |> 
+	setNames(c(paste0("P", 1:5), "HIV")) |> 
+	tidyr::pivot_longer(cols = -HIV) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(HIV, name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	dplyr::filter(!is.na(HIV)) |> 
+	ggplot(aes(y = name, x = n)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = pct), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution by HIV Status"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		limits = c(0, 320)
+	) + 
+	facet_wrap(~ HIV, labeller = label_both) +
+	theme_classic() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
+	setNames(c(paste0("P", 1:5), "HIV", "Age")) |> 
+	tidyr::pivot_longer(cols = -c(HIV, Age)) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(Age, HIV, name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	dplyr::filter(!is.na(Age), !is.na(HIV)) |> 
+	ggplot(aes(y = name, x = n)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = pct), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution by HIV Status"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		limits = c(0, 220)
+	) + 
+	facet_grid(Age ~ HIV, labeller = label_both) +
+	theme_classic() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+```
+
+## Number of HPV genotypes by HIV and HPV status
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+tbl_merge(
+	tbls = list(
+		fsw |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_total(missing = "ifany"), 
+		fsw |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level, hpv_hiv
+			) |> 
+			table1_by(by = hpv_hiv, 
+						byname = "Combined HIV & HPV Status ", 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "**Combined HIV & HPV Status**")
+)
+	
+```
+
+
+
+## Factors associated with HPV
+
+### Unadjusted Odds Ratios
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+fsw |> 
+	dplyr::select(
+		Gender, age_cat, hiv_self_report, 
+		MaritalStatus:menopause, contraceptive, hpv_test,
+		condom_lastsex:num_partner_reg, 
+		num_partner_hiv_cas:num_partner_hiv_reg, 
+		drug_sex_cas:drug_sex_reg, douching, douching_with,
+		response
+	) |> 
+	dplyr::mutate(
+		contraceptive = as.numeric(contraceptive != "None")
+	) |>
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE) |> 
+	tbl_uvregression(
+		method = glm,
+		y = response,
+		method.args = list(family = binomial),
+		exponentiate = TRUE
+	)
+```
+
+
+
+### Adjusted Odds Ratios
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+
+
+mod_lm <- glm(
+	response ~ Gender + age_cat + hiv_self_report +
+		hpv_test + condom_access + sex_work_yr + num_partner_hiv_reg,
+	family = binomial, 
+	data = fsw
+) 
+
+mod_lm |> 
+	gtsummary::tbl_regression(
+		exponentiate = TRUE
+	)
+```
+
+
+
+## TO-DO Lists
+
+- Explore more variables: sexual practices + egocentric variables
+- Other variables: violence, quality of life, 
+- Integrate with flow data + immunological data
+
+On technical side
+
+- Missing values
+- Could add more works on model selection and refining
