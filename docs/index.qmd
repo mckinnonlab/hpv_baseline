@@ -39,7 +39,7 @@ This is a preliminary data analysis using baseline data from Gates-funded HPV st
 
 ## Known issues
 
-The study screened 1,968 participants and enrolled 701. However, due to filing issues which the team in Nairobi are currently fixing, the database comprises of only `r nrow(combined)` unique individuals (short of `r 1968 - nrow(combined)`), which are used in the following analysis. 
+The study screened 1,968 participants and enrolled 701. However, due to filing issues which the team in Nairobi are currently fixing, the database comprises of only `r nrow(combined)` unique individuals (short of `r 1968 - nrow(combined)`), which are used in the following analysis.
 
 ## Exploratory data analysis
 
@@ -74,8 +74,7 @@ tbl_merge(
 
 ```
 
-
-### Population Pyramid Graph 
+### Population Pyramid Graph
 
 ```{r}
 #| warning: false
@@ -90,11 +89,8 @@ combined |>
 		y = "Frequency", 
 		x = "Age"
 	) + 
-	theme_classic()
+	theme_bw()
 ```
-
-
-
 
 ## Prevalence of HPV by baseline characteristics
 
@@ -127,6 +123,147 @@ gtsummary::tbl_merge(
 )
 ```
 
+## Five genotype channels showing ct values
+
+> P1 = HPV 16
+>
+> P2 = HPV 18 or 45
+>
+> P3 = HPV 31,33,35,52 or 58
+>
+> P4 = HPV 51 or 59
+>
+> P5 = HPV 39, 56, 66 or 68
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 5
+
+
+d <- fsw |> 
+	dplyr::filter(hpv_result == "Positive") |> 
+	dplyr::select(hr_hpv_16:hr_p5) |> 
+	setNames(paste0("P", 1:5)) |> 
+	tidyr::pivot_longer(cols = everything()) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::mutate(value = if_else(value == 0, NA, value))
+
+d |> 
+	ggplot(aes(x = name, y = value)) + 
+	geom_boxplot(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		width = .5, 
+		show.legend = FALSE
+	) + 
+	geom_point(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		position = position_jitter(.15, seed = 123), 
+		shape = 21, 
+		size = 2.5, 
+		stroke = .5,
+		alpha = .6
+	) + 
+	geom_text(
+		data = 
+			d |> 
+			dplyr::filter(!is.na(value)) |> 
+			dplyr::count(name) |> 
+			dplyr::mutate(
+				pct = n / sum(n), 
+				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
+				value = 10
+			), 
+		aes(label = n)
+	) + 
+	labs(
+		x = NULL, 
+		y = "Ct value", 
+		title = "Genotype channels showing ct values among HPV positive patients"
+	) + 
+	theme_bw() + 
+	theme(
+		legend.position = "none", 
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+```
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 16
+#| fig-height: 12
+d <- fsw |> 
+	dplyr::filter(hpv_result == "Positive") |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
+	setNames(c(paste0("P", 1:5), "HIV", "Age")) |> 
+	tidyr::pivot_longer(cols = -c(HIV, Age)) |> 
+	dplyr::filter(!is.na(value), !is.na(HIV)) |> 
+	dplyr::mutate(value = if_else(value == 0, NA, value))
+
+d |> 
+	ggplot(aes(x = name, y = value)) + 
+	geom_boxplot(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		width = .5, 
+		show.legend = FALSE
+	) + 
+	geom_point(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		position = position_jitter(.15, seed = 123), 
+		shape = 21, 
+		size = 2.5, 
+		stroke = .5,
+		alpha = .6
+	) + 
+	geom_text(
+		data = 
+			d |> 
+			dplyr::filter(!is.na(value)) |> 
+			dplyr::count(HIV, Age, name) |> 
+			dplyr::group_by(HIV, Age) |> 
+			dplyr::mutate(
+				pct = n / sum(n), 
+				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
+				value = 10
+			), 
+		aes(label = n)
+	) + 
+	labs(
+		x = NULL, 
+		y = "Ct value", 
+		title = "Genotype channels showing ct values among HPV positive patients"
+	) + 
+	theme_bw() + 
+	theme(
+		legend.position = "none", 
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	) + 
+	facet_grid(Age ~ HIV, labeller = label_both)
+
+```
 
 ## Genotype distributions
 
@@ -151,6 +288,18 @@ gtsummary::tbl_merge(
 # 	), 
 # 	tab_spanner = c(NA, "HPV Result")
 # )
+
+fsw <- 
+	fsw |> 
+	dplyr::mutate(
+		across(hr_hpv_16:hr_p5, 
+					 ~ if_else(
+					 	hpv_result == "Positive" & .x > 0, "Yes", "No" 
+					 )), 
+		hpv_combined = (hr_hpv_16 == "Yes") + (hr_hpv_18_45 == "Yes") + 
+			(hr_p3 == "Yes") + (hr_p4 == "Yes") + (hr_p5 == "Yes")
+	)
+	
 fsw |> 
 	dplyr::select(hr_hpv_16:hr_p5) |> 
 	setNames(paste0("P", 1:5)) |> 
@@ -174,9 +323,10 @@ fsw |>
 	) + 
 	scale_x_continuous(
 		expand = c(.01, .01), 
+		limits = c(0, 400)
 		
 	) + 
-	theme_classic() +
+	theme_bw() +
 	theme(
 		plot.title = element_text(face = "bold"), 
 		axis.title = element_text(face = "bold")
@@ -206,10 +356,10 @@ fsw |>
 	) + 
 	scale_x_continuous(
 		expand = c(.01, .01), 
-		limits = c(0, 320)
+		limits = c(0, 350)
 	) + 
 	facet_wrap(~ HIV, labeller = label_both) +
-	theme_classic() +
+	theme_bw() +
 	theme(
 		plot.title = element_text(face = "bold"), 
 		axis.title = element_text(face = "bold")
@@ -243,7 +393,7 @@ fsw |>
 		limits = c(0, 220)
 	) + 
 	facet_grid(Age ~ HIV, labeller = label_both) +
-	theme_classic() +
+	theme_bw() +
 	theme(
 		plot.title = element_text(face = "bold"), 
 		axis.title = element_text(face = "bold")
@@ -281,11 +431,10 @@ tbl_merge(
 	
 ```
 
-
-
 ## Factors associated with HPV
 
 ### Unadjusted Odds Ratios
+
 ```{r}
 #| error: false
 #| warning: false
@@ -311,8 +460,6 @@ fsw |>
 	)
 ```
 
-
-
 ### Adjusted Odds Ratios
 
 ```{r}
@@ -334,15 +481,13 @@ mod_lm |>
 	)
 ```
 
-
-
 ## TO-DO Lists
 
-- Explore more variables: sexual practices + egocentric variables
-- Other variables: violence, quality of life, 
-- Integrate with flow data + immunological data
+-   Explore more variables: sexual practices + egocentric variables
+-   Other variables: violence, quality of life,
+-   Integrate with flow data + immunological data
 
 On technical side
 
-- Missing values
-- Could add more works on model selection and refining
+-   Missing values
+-   Could add more works on model selection and refining

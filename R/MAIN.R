@@ -46,12 +46,6 @@ combined <- screen |>
 			hiv_self_report == "Positive" & hpv_result == "Negative" ~ "HIV+HPV-", 	
 		), 
 		response = as.numeric(hpv_result == "Positive"), 
-		across(hr_hpv_16:hr_p5, 
-					 ~ if_else(
-					 	hpv_result == "Positive" & .x > 0, "Yes", "No" 
-					 )), 
-		hpv_combined = (hr_hpv_16 == "Yes") + (hr_hpv_18_45 == "Yes") + 
-			(hr_p3 == "Yes") + (hr_p4 == "Yes") + (hr_p5 == "Yes")
 	) |> 
 	dplyr::select(-pid) |>
 	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
@@ -62,3 +56,5 @@ save(combined, vars, file = here::here("data", "hpv_processed.rda"))
 
 ## exploratory data analysis
 # source(here::here("R", "03_eda.R"), echo = FALSE)
+
+
