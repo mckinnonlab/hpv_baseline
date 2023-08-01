@@ -80,7 +80,7 @@ tbl_merge(
 ```{r}
 #| warning: false
 #| fig-width: 8
-#| fig-height: 8
+#| fig-height: 6
 combined |> 
 	dplyr::mutate(
 		age_cat2 = cut(Age, c(0, 20, 30, 40, 50, 60, 100))
