@@ -2,8 +2,9 @@
 
 table1_total <- function(data, 
 												 missing = c("no", "ifany", "always"),
-												 percent = c("column", "row"),...) {
-	data |> 
+												 percent = c("column", "row"), 
+												 add_n = TRUE, ...) {
+	tbl <- data |> 
 		gtsummary::tbl_summary(
 			statistic = list(
 				gtsummary::all_continuous2() ~ "{median} ({p25} - {p75})",
@@ -20,9 +21,16 @@ table1_total <- function(data,
 		) %>%
 		gtsummary::modify_header(
 			all_stat_cols() ~ "**{level}**, N = {n}"
-		) %>% 
-		gtsummary::add_n() %>%
+		) |> 
 		gtsummary::bold_labels()
+	
+	if (add_n) {
+		tbl <- tbl %>% 
+			gtsummary::add_n()
+	} else {
+		tbl	
+	}
+	return(tbl)
 } 
 
 

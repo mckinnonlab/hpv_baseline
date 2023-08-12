@@ -27,6 +27,32 @@ library(gtsummary)
 
 ## import custom-functions from utils
 source(here::here("R", "utils.R"), echo = FALSE)
+
+## relabelling
+vars$sex <- "Cohort Type"
+
+combined <- combined |> 
+	mutate(
+		age_cat = case_when(
+			Age <= 20 ~ "≤20", 
+			Age > 20 & Age <= 25 ~ "21-25", 
+			Age > 25 & Age <= 30 ~ "25-30", 
+			Age > 30 & Age <= 35 ~ "31-35", 
+			Age > 35 & Age <= 40 ~ "36-40", 
+			Age > 40 & Age <= 45 ~ "41-45", 
+			Age > 45 & Age <= 50 ~ "46-50", 
+			Age > 50 ~ "51+"
+		), 
+		age_cat = factor(age_cat), 
+		across(hr_hpv_16:hr_p5, ~ 1/.x), 
+		across(hr_hpv_16:hr_p5, ~ if_else(is.infinite(.x), NA, .x)), 
+		sex_work_yr = case_when(
+			sex_work_yr >= 0 & sex_work_yr <= 3 ~ "0-3", 
+			sex_work_yr > 3 & sex_work_yr <= 6 ~ "3-6", 
+			sex_work_yr > 6 ~ "7+", 
+		)
+	) |> 
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
 ```
 
 ## About
@@ -54,7 +80,7 @@ tbl_merge(
 	tbls = list(
 		combined |> 
 			dplyr::select(
-				Gender, sex, Age, age_cat, hiv_self_report, 
+				sex, Gender, Age, age_cat, hiv_self_report, 
 				MaritalStatus, education_level
 			) |> 
 			table1_total(missing = "ifany"), 
@@ -64,15 +90,13 @@ tbl_merge(
 				MaritalStatus, education_level
 			) |> 
 			table1_by(by = sex, 
-						byname = "Participant Type by Sex", 
 						# missing = "ifany", 
 						percent = "row", 
 						add_N = FALSE, 
 						add_total = FALSE)
 	),
-	tab_spanner = c(NA, "**Participant Type by Sex**")
+	tab_spanner = c(NA, "**Cohort Type**")
 )
-
 ```
 
 ### Population Pyramid Graph
@@ -82,10 +106,7 @@ tbl_merge(
 #| fig-width: 8
 #| fig-height: 6
 combined |> 
-	dplyr::mutate(
-		age_cat2 = cut(Age, c(0, 20, 30, 40, 50, 60, 100))
-	) |> 
-	apyramid::age_pyramid(age_cat2, sex) + 
+	apyramid::age_pyramid(age_cat, sex) + 
 	labs(
 		y = "Frequency", 
 		x = "Age"
@@ -110,7 +131,7 @@ fsw <-
 gtsummary::tbl_merge(
 	tbls = list(
 		fsw |> 
-			dplyr::select(Gender:douching_with) |> 
+			dplyr::select(sex, Gender:douching_with) |> 
 			table1_total(missing = "ifany"), 
 		fsw |> 
 			dplyr::select(Gender:douching_with, hpv_result) |> 
@@ -183,14 +204,14 @@ d |>
 			dplyr::mutate(
 				pct = n / sum(n), 
 				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
-				value = 10
+				value = 0.06
 			), 
 		aes(label = n)
 	) + 
 	labs(
 		x = NULL, 
-		y = "Ct value", 
-		title = "Genotype channels showing ct values among HPV positive patients"
+		y = "1/Ct value", 
+		title = "Genotype channels showing 1/ct values among HPV positive patients"
 	) + 
 	theme_bw() + 
 	theme(
@@ -211,15 +232,15 @@ d <- fsw |>
 	dplyr::filter(hpv_result == "Positive") |> 
 	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
 	setNames(c(paste0("P", 1:5), "HIV", "Age")) |> 
-	tidyr::pivot_longer(cols = -c(HIV, Age)) |> 
+	tidyr::pivot_longer(cols = -c(HIV, Age), names_to = "Genotype") |> 
 	dplyr::filter(!is.na(value), !is.na(HIV)) |> 
 	dplyr::mutate(value = if_else(value == 0, NA, value))
 
 d |> 
-	ggplot(aes(x = name, y = value)) + 
+	ggplot(aes(x = Age, y = value)) + 
 	geom_boxplot(
 		aes(
-			fill = name, 
+			fill = Age, 
 			fill = after_scale(colorspace::lighten(fill, .5)),
 			color = after_scale(colorspace::darken(fill, .5)),
 		), 
@@ -228,7 +249,7 @@ d |>
 	) + 
 	geom_point(
 		aes(
-			fill = name, 
+			fill = Age, 
 			fill = after_scale(colorspace::lighten(fill, .5)),
 			color = after_scale(colorspace::darken(fill, .5)),
 		), 
@@ -242,12 +263,12 @@ d |>
 		data = 
 			d |> 
 			dplyr::filter(!is.na(value)) |> 
-			dplyr::count(HIV, Age, name) |> 
+			dplyr::count(HIV, Age, Genotype) |> 
 			dplyr::group_by(HIV, Age) |> 
 			dplyr::mutate(
 				pct = n / sum(n), 
 				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
-				value = 10
+				value = 0.06
 			), 
 		aes(label = n)
 	) + 
@@ -262,7 +283,7 @@ d |>
 		plot.title = element_text(face = "bold"), 
 		axis.title = element_text(face = "bold")
 	) + 
-	facet_grid(Age ~ HIV, labeller = label_both)
+	facet_grid(Genotype ~ HIV, labeller = label_both)
 
 ```
 
@@ -274,32 +295,44 @@ d |>
 #| message: false
 #| fig-width: 8
 #| fig-height: 5
-# gtsummary::tbl_merge(
-# 	tbls = list(
-# 		fsw |> 
-# 			dplyr::select(hr_hpv_16:hpv_combined) |> 
-# 			table1_total(missing = "ifany"), 
-# 		fsw |> 
-# 			dplyr::select(hr_hpv_16:hpv_combined, hpv_result) |> 
-# 			table1_by(by = hpv_result, byname = "HPV Result", 
-# 						# missing = "ifany", 
-# 						percent = "row", 
-# 						add_N = FALSE, 
-# 						add_total = FALSE)
-# 	), 
-# 	tab_spanner = c(NA, "HPV Result")
-# )
-
 fsw <- 
 	fsw |> 
 	dplyr::mutate(
 		across(hr_hpv_16:hr_p5, 
 					 ~ if_else(
-					 	hpv_result == "Positive" & .x > 0, "Yes", "No" 
+					 	hpv_result == "Positive" & !is.na(.x), "Yes", "No" 
 					 )), 
 		hpv_combined = (hr_hpv_16 == "Yes") + (hr_hpv_18_45 == "Yes") + 
-			(hr_p3 == "Yes") + (hr_p4 == "Yes") + (hr_p5 == "Yes")
-	)
+			(hr_p3 == "Yes") + (hr_p4 == "Yes") + (hr_p5 == "Yes"), 
+		hpv_combined = if_else(hpv_combined == 0, NA, hpv_combined)
+	) |> 
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
+
+
+gtsummary::tbl_merge(
+	tbls = list(
+		fsw |>
+			dplyr::select(hr_hpv_16:hpv_combined, hiv_self_report) |>
+			table1_total(missing = "ifany"),
+		fsw |>
+			dplyr::select(hpv_result, hr_hpv_16:hpv_combined) |>
+			table1_by(by = hpv_result, byname = "HPV Result",
+						# missing = "ifany",
+						percent = "row",
+						add_N = FALSE,
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "HPV Result")
+)
+
+
+fsw |>
+			dplyr::select(hpv_combined, hiv_self_report) |>
+			table1_by(by = hiv_self_report, byname = "HIV Result",
+						# missing = "ifany",
+						percent = "row",
+						add_N = FALSE,
+						add_total = FALSE)
 	
 fsw |> 
 	dplyr::select(hr_hpv_16:hr_p5) |> 
@@ -342,14 +375,14 @@ fsw |>
 	dplyr::summarise(n = n()) |> 
 	dplyr::mutate(
 		pct = n / sum(n), 
-		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+		label = paste0(n, " (", scales::label_percent()(pct), ")")
 	) |> 
 	dplyr::ungroup() |> 
 	dplyr::filter(value != "No") |> 
 	dplyr::filter(!is.na(HIV)) |> 
-	ggplot(aes(y = name, x = n)) + 
+	ggplot(aes(y = name, x = pct)) + 
 	geom_col(aes(fill = name), show.legend = FALSE) + 
-	geom_label(aes(label = pct), hjust = 0) + 
+	geom_label(aes(label = label), hjust = 0) + 
 	labs(
 		x = "Number", 
 		y = "Genotype Channel", 
@@ -357,7 +390,8 @@ fsw |>
 	) + 
 	scale_x_continuous(
 		expand = c(.01, .01), 
-		limits = c(0, 350)
+		labels = scales::label_percent(),
+		limits = c(0, .5)
 	) + 
 	facet_wrap(~ HIV, labeller = label_both) +
 	theme_bw() +
@@ -366,6 +400,15 @@ fsw |>
 		axis.title = element_text(face = "bold")
 	)
 
+
+```
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 16
 
 fsw |> 
 	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
@@ -376,14 +419,14 @@ fsw |>
 	dplyr::summarise(n = n()) |> 
 	dplyr::mutate(
 		pct = n / sum(n), 
-		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+		label = paste0(n, " (", scales::label_percent()(pct), ")")
 	) |> 
 	dplyr::ungroup() |> 
 	dplyr::filter(value != "No") |> 
 	dplyr::filter(!is.na(Age), !is.na(HIV)) |> 
-	ggplot(aes(y = name, x = n)) + 
+	ggplot(aes(y = name, x = pct)) + 
 	geom_col(aes(fill = name), show.legend = FALSE) + 
-	geom_label(aes(label = pct), hjust = 0) + 
+	geom_label(aes(label = label), hjust = 0) + 
 	labs(
 		x = "Number", 
 		y = "Genotype Channel", 
@@ -391,7 +434,8 @@ fsw |>
 	) + 
 	scale_x_continuous(
 		expand = c(.01, .01), 
-		limits = c(0, 220)
+		labels = scales::label_percent(),
+		limits = c(0, .7)
 	) + 
 	facet_grid(Age ~ HIV, labeller = label_both) +
 	theme_bw() +

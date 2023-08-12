@@ -47,7 +47,7 @@ combined <- screen |>
 		), 
 		response = as.numeric(hpv_result == "Positive"), 
 	) |> 
-	dplyr::select(-pid) |>
+	# dplyr::select(-pid) |>
 	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
 
 ## save processed dataset for further analysis
@@ -57,4 +57,15 @@ save(combined, vars, file = here::here("data", "hpv_processed.rda"))
 ## exploratory data analysis
 # source(here::here("R", "03_eda.R"), echo = FALSE)
 
+
+vars_names <- combined |> 
+	select(Gender, Age, hiv_self_report:alcohol, contraceptive:hpv_vaccine, 
+				 condom_lastsex:num_partner_reg, douching) |> 
+	names()
+
+vars_names |> 
+	lapply(function(x) {
+		combined[is.na(combined[[x]]), c("pid", x)] |> 
+			rio::export(sprintf("output/missing-values-%s.xlsx", x))
+	})
 
