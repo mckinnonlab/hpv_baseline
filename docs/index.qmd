@@ -486,7 +486,7 @@ tbl_merge(
 #| message: false
 fsw |> 
 	dplyr::select(
-		Gender, age_cat, hiv_self_report, 
+		Gender, Age, age_cat, hiv_self_report, 
 		MaritalStatus:menopause, contraceptive, hpv_test,
 		condom_lastsex:num_partner_reg, 
 		num_partner_hiv_cas:num_partner_hiv_reg, 
