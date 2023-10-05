@@ -1,0 +1,538 @@
+---
+title: "HPV Baseline Preliminary Data Analysis"
+author: Myo Minn Oo & Joel Fowke
+date: 2023-07-28
+date-modified: last-modified
+title-block-style: plain
+title-block-banner: true
+code-fold: true
+code-copy: true
+code-overflow: wrap
+code-tools: true
+toc: true
+toc-depth: 3
+toc-expand: true
+format: html
+---
+
+```{r setup}
+#| warning: false
+#| message: false
+here::here("data", "hpv_processed.rda") |> 
+	load()
+
+## load packages
+library(tidyverse)
+library(gtsummary)
+
+## import custom-functions from utils
+source(here::here("R", "utils.R"), echo = FALSE)
+
+## relabelling
+vars$sex <- "Cohort Type"
+
+combined <- combined |> 
+	mutate(
+		age_cat = case_when(
+			Age <= 20 ~ "≤20", 
+			Age > 20 & Age <= 25 ~ "21-25", 
+			Age > 25 & Age <= 30 ~ "25-30", 
+			Age > 30 & Age <= 35 ~ "31-35", 
+			Age > 35 & Age <= 40 ~ "36-40", 
+			Age > 40 & Age <= 45 ~ "41-45", 
+			Age > 45 & Age <= 50 ~ "46-50", 
+			Age > 50 ~ "51+"
+		), 
+		age_cat = factor(age_cat), 
+		across(hr_hpv_16:hr_p5, ~ 1/.x), 
+		across(hr_hpv_16:hr_p5, ~ if_else(is.infinite(.x), NA, .x)), 
+		sex_work_yr = case_when(
+			sex_work_yr >= 0 & sex_work_yr <= 3 ~ "0-3", 
+			sex_work_yr > 3 & sex_work_yr <= 6 ~ "3-6", 
+			sex_work_yr > 6 ~ "7+", 
+		)
+	) |> 
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
+```
+
+## About
+
+This is a preliminary data analysis using baseline data from Gates-funded HPV study in Nairobi, 2022-2023. The screening period is between May/June 2022 and July 2023.
+
+## Research questions
+
+1.  What is the prevalence of HPV among female sex workers and the distributions of genotypes (using geneXpert machine; hence five channel)?
+2.  What baseline characteristics correlate with HPV prevalence?
+
+## Known issues
+
+The study screened 1,968 participants and enrolled 701. However, due to filing issues which the team in Nairobi are currently fixing, the database comprises of only `r nrow(combined)` unique individuals (short of `r 1968 - nrow(combined)`), which are used in the following analysis.
+
+## Exploratory data analysis
+
+### Comparing baseline characteristics between FSW and MSM:
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+tbl_merge(
+	tbls = list(
+		combined |> 
+			dplyr::select(
+				sex, Gender, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_total(missing = "ifany"), 
+		combined |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_by(by = sex, 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "**Cohort Type**")
+)
+```
+
+### Population Pyramid Graph
+
+```{r}
+#| warning: false
+#| fig-width: 8
+#| fig-height: 6
+combined |> 
+	apyramid::age_pyramid(age_cat, sex) + 
+	labs(
+		y = "Frequency", 
+		x = "Age"
+	) + 
+	theme_bw()
+```
+
+## Prevalence of HPV by baseline characteristics
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+fsw <- 
+	combined |> 
+	dplyr::filter(sex == "FSW") |> 
+	dplyr::mutate(
+		Gender = forcats::fct_drop(Gender)
+	)
+
+
+gtsummary::tbl_merge(
+	tbls = list(
+		fsw |> 
+			dplyr::select(sex, Gender:douching_with) |> 
+			table1_total(missing = "ifany"), 
+		fsw |> 
+			dplyr::select(Gender:douching_with, hpv_result) |> 
+			table1_by(by = hpv_result, byname = "HPV Result", 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	), 
+	tab_spanner = c(NA, "HPV Result")
+)
+```
+
+## Five genotype channels showing ct values
+
+> P1 = HPV 16
+>
+> P2 = HPV 18 or 45
+>
+> P3 = HPV 31,33,35,52 or 58
+>
+> P4 = HPV 51 or 59
+>
+> P5 = HPV 39, 56, 66 or 68
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 5
+
+
+d <- fsw |> 
+	dplyr::filter(hpv_result == "Positive") |> 
+	dplyr::select(hr_hpv_16:hr_p5) |> 
+	setNames(paste0("P", 1:5)) |> 
+	tidyr::pivot_longer(cols = everything()) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::mutate(value = if_else(value == 0, NA, value))
+
+d |> 
+	ggplot(aes(x = name, y = value)) + 
+	geom_boxplot(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		width = .5, 
+		show.legend = FALSE
+	) + 
+	geom_point(
+		aes(
+			fill = name, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		position = position_jitter(.15, seed = 123), 
+		shape = 21, 
+		size = 2.5, 
+		stroke = .5,
+		alpha = .6
+	) + 
+	geom_text(
+		data = 
+			d |> 
+			dplyr::filter(!is.na(value)) |> 
+			dplyr::count(name) |> 
+			dplyr::mutate(
+				pct = n / sum(n), 
+				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
+				value = 0.06
+			), 
+		aes(label = n)
+	) + 
+	labs(
+		x = NULL, 
+		y = "1/Ct value", 
+		title = "Genotype channels showing 1/ct values among HPV positive patients"
+	) + 
+	theme_bw() + 
+	theme(
+		legend.position = "none", 
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+```
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 16
+#| fig-height: 12
+d <- fsw |> 
+	dplyr::filter(hpv_result == "Positive") |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
+	setNames(c(paste0("P", 1:5), "HIV", "Age")) |> 
+	tidyr::pivot_longer(cols = -c(HIV, Age), names_to = "Genotype") |> 
+	dplyr::filter(!is.na(value), !is.na(HIV)) |> 
+	dplyr::mutate(value = if_else(value == 0, NA, value))
+
+d |> 
+	ggplot(aes(x = Age, y = value)) + 
+	geom_boxplot(
+		aes(
+			fill = Age, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		width = .5, 
+		show.legend = FALSE
+	) + 
+	geom_point(
+		aes(
+			fill = Age, 
+			fill = after_scale(colorspace::lighten(fill, .5)),
+			color = after_scale(colorspace::darken(fill, .5)),
+		), 
+		position = position_jitter(.15, seed = 123), 
+		shape = 21, 
+		size = 2.5, 
+		stroke = .5,
+		alpha = .6
+	) + 
+	geom_text(
+		data = 
+			d |> 
+			dplyr::filter(!is.na(value)) |> 
+			dplyr::count(HIV, Age, Genotype) |> 
+			dplyr::group_by(HIV, Age) |> 
+			dplyr::mutate(
+				pct = n / sum(n), 
+				n = paste0("(n=", n, ", ", scales::label_percent(accuracy = .1)(pct), ")"),
+				value = 0.06
+			), 
+		aes(label = n)
+	) + 
+	labs(
+		x = NULL, 
+		y = "Ct value", 
+		title = "Genotype channels showing ct values among HPV positive patients"
+	) + 
+	theme_bw() + 
+	theme(
+		legend.position = "none", 
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	) + 
+	facet_grid(Genotype ~ HIV, labeller = label_both)
+
+```
+
+## Genotype distributions
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 5
+fsw <- 
+	fsw |> 
+	dplyr::mutate(
+		across(hr_hpv_16:hr_p5, 
+					 ~ if_else(
+					 	hpv_result == "Positive" & !is.na(.x), "Yes", "No" 
+					 )), 
+		hpv_combined = (hr_hpv_16 == "Yes") + (hr_hpv_18_45 == "Yes") + 
+			(hr_p3 == "Yes") + (hr_p4 == "Yes") + (hr_p5 == "Yes"), 
+		hpv_combined = if_else(hpv_combined == 0, NA, hpv_combined)
+	) |> 
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE)
+
+
+gtsummary::tbl_merge(
+	tbls = list(
+		fsw |>
+			dplyr::select(hr_hpv_16:hpv_combined, hiv_self_report) |>
+			table1_total(missing = "ifany"),
+		fsw |>
+			dplyr::select(hpv_result, hr_hpv_16:hpv_combined) |>
+			table1_by(by = hpv_result, byname = "HPV Result",
+						# missing = "ifany",
+						percent = "row",
+						add_N = FALSE,
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "HPV Result")
+)
+
+
+fsw |>
+			dplyr::select(hpv_combined, hiv_self_report) |>
+			table1_by(by = hiv_self_report, byname = "HIV Result",
+						# missing = "ifany",
+						percent = "row",
+						add_N = FALSE,
+						add_total = FALSE)
+	
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5) |> 
+	setNames(paste0("P", 1:5)) |> 
+	tidyr::pivot_longer(cols = everything()) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		pct = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	ggplot(aes(y = name, x = n)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = pct), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution among FSW"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		limits = c(0, 400)
+		
+	) + 
+	theme_bw() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report) |> 
+	setNames(c(paste0("P", 1:5), "HIV")) |> 
+	tidyr::pivot_longer(cols = -HIV) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(HIV, name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		label = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	dplyr::filter(!is.na(HIV)) |> 
+	ggplot(aes(y = name, x = pct)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = label), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution by HIV Status"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		labels = scales::label_percent(),
+		limits = c(0, .5)
+	) + 
+	facet_wrap(~ HIV, labeller = label_both) +
+	theme_bw() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+
+
+```
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+#| fig-width: 8
+#| fig-height: 16
+
+fsw |> 
+	dplyr::select(hr_hpv_16:hr_p5, hiv_self_report, age_cat) |> 
+	setNames(c(paste0("P", 1:5), "HIV", "Age")) |> 
+	tidyr::pivot_longer(cols = -c(HIV, Age)) |> 
+	dplyr::filter(!is.na(value)) |> 
+	dplyr::group_by(Age, HIV, name, value) |> 
+	dplyr::summarise(n = n()) |> 
+	dplyr::mutate(
+		pct = n / sum(n), 
+		label = paste0(n, " (", scales::label_percent()(pct), ")")
+	) |> 
+	dplyr::ungroup() |> 
+	dplyr::filter(value != "No") |> 
+	dplyr::filter(!is.na(Age), !is.na(HIV)) |> 
+	ggplot(aes(y = name, x = pct)) + 
+	geom_col(aes(fill = name), show.legend = FALSE) + 
+	geom_label(aes(label = label), hjust = 0) + 
+	labs(
+		x = "Number", 
+		y = "Genotype Channel", 
+		title = "HPV Genotype Distribution by HIV Status"
+	) + 
+	scale_x_continuous(
+		expand = c(.01, .01), 
+		labels = scales::label_percent(),
+		limits = c(0, .7)
+	) + 
+	facet_grid(Age ~ HIV, labeller = label_both) +
+	theme_bw() +
+	theme(
+		plot.title = element_text(face = "bold"), 
+		axis.title = element_text(face = "bold")
+	)
+```
+
+## Number of HPV genotypes by HIV and HPV status
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+tbl_merge(
+	tbls = list(
+		fsw |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level
+			) |> 
+			table1_total(missing = "ifany"), 
+		fsw |> 
+			dplyr::select(
+				Gender, sex, Age, age_cat, hiv_self_report, 
+				MaritalStatus, education_level, hpv_hiv
+			) |> 
+			table1_by(by = hpv_hiv, 
+						byname = "Combined HIV & HPV Status ", 
+						# missing = "ifany", 
+						percent = "row", 
+						add_N = FALSE, 
+						add_total = FALSE)
+	),
+	tab_spanner = c(NA, "**Combined HIV & HPV Status**")
+)
+	
+```
+
+## Factors associated with HPV
+
+### Unadjusted Odds Ratios
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+fsw |> 
+	dplyr::select(
+		Gender, Age, age_cat, hiv_self_report, 
+		MaritalStatus:menopause, contraceptive, hpv_test,
+		condom_lastsex:num_partner_reg, 
+		num_partner_hiv_cas:num_partner_hiv_reg, 
+		drug_sex_cas:drug_sex_reg, douching, douching_with,
+		response
+	) |> 
+	dplyr::mutate(
+		contraceptive = as.numeric(contraceptive != "None")
+	) |>
+	labelled::set_variable_labels(.labels = vars, .strict = FALSE) |> 
+	tbl_uvregression(
+		method = glm,
+		y = response,
+		method.args = list(family = binomial),
+		exponentiate = TRUE
+	)
+```
+
+### Adjusted Odds Ratios
+
+```{r}
+#| error: false
+#| warning: false
+#| message: false
+
+
+mod_lm <- glm(
+	response ~ Gender + age_cat + hiv_self_report +
+		hpv_test + condom_access + sex_work_yr + num_partner_hiv_reg,
+	family = binomial, 
+	data = fsw
+) 
+
+mod_lm |> 
+	gtsummary::tbl_regression(
+		exponentiate = TRUE
+	)
+```
+
+## TO-DO Lists
+
+-   Explore more variables: sexual practices + egocentric variables
+-   Other variables: violence, quality of life,
+-   Integrate with flow data + immunological data
+
+On technical side
+
+-   Missing values
+-   Could add more works on model selection and refining

@@ -19,9 +19,9 @@ table1_total <- function(data,
 			percent = percent[1],
 			...
 		) %>%
-		gtsummary::modify_header(
-			all_stat_cols() ~ "**{level}**, N = {n}"
-		) |> 
+		# gtsummary::modify_header(
+		# 	all_stat_cols() ~ "**{level}**, N = {n}"
+		# ) |> 
 		gtsummary::bold_labels()
 	
 	if (add_n) {
@@ -58,9 +58,9 @@ table1_by <- function(data, by,
 			missing_text = "Missing",
 			percent = percent[1], ...
 		) %>%
-		gtsummary::modify_header(
-			all_stat_cols() ~ "**{level}**, N = {n} ({style_percent(p, digits = 1)}%)"
-		) %>%
+		# gtsummary::modify_header(
+		# 	all_stat_cols() ~ "**{level}**, N = {n} ({style_percent(p, digits = 1)}%)"
+		# ) %>%
 		gtsummary::bold_labels()
 	
 	header <- 

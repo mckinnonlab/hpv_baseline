@@ -471,3 +471,37 @@ mod_lm |>
 		x = "Odds Ratio"
 	)
 
+
+
+
+
+
+
+combined |> 
+	select(hpv_result, hiv_self_report) |> 
+	filter(!is.na(hpv_result), !is.na(hiv_self_report)) |> 
+	count(hpv_result, hiv_self_report) |> 
+	group_by(hiv_self_report) |> 
+	mutate(pct = n / sum(n), 
+				 hiv_self_report = paste("HIV: ", hiv_self_report), 
+				 label = paste0(
+				 	n, " (", scales::label_percent(accuracy = 0.1)(pct), ")"
+				 )) |> 
+	ggplot(aes(x = hpv_result, y = pct)) + 
+	geom_col(
+		aes(fill = hpv_result), 
+	) + 
+	scale_y_continuous(
+		expand = c(.01, .01), 
+		limits = c(0, 1), 
+		labels = scales::label_percent()
+	) +
+	scale_fill_manual(values = c("blue", "red")) + 
+	geom_text(aes(label = label), vjust = -1, size = 4.5, fontface = "bold") +
+	facet_wrap(~ hiv_self_report) + 
+	labs(
+		x = "HPV Result", 
+		y = "Percentage"
+	) 
+ggsave(here::here("output", "presentation", "plot_hpv_prevalence_by_hiv.png"), 
+			 width = 8, height = 6)
